@@ -116,7 +116,7 @@ function StartServer(int Port)
 	levelData = GetLevelPacket();
 	WriteToFileLevel(levelData, OUTPUT_PATH);
 	
-	FireClientEvent("Start" @ string(Port)); // External
+	FireClientEvent("Start" @ string(Port) @ Username @ U.GetHP()); // External
 	
 	class'S2MVersion'.static.DebugLog("Initialization packet created by" @ Username $ ".");
 	class'S2MVersion'.static.DebugLog("Server starting up...");
@@ -146,7 +146,10 @@ function StopServer()
 // Prepares connecting to a server.
 function PreConnectToServer(string IP, int Port)
 {
-	FireClientEvent("Connect" @ IP @ string(Port)); // External
+	Username = class'S2MConfig'.default.sUsername;
+	IsHost = false;
+
+	FireClientEvent("Connect" @ IP @ string(Port) @ Username @ U.GetHP()); // External
 	
 	class'S2MVersion'.static.DebugLog("Initiating server connection, awaiting response...");
 }
