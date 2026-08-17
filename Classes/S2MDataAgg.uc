@@ -44,6 +44,7 @@ var protected array<LevelPacketStruct> InitServerLevelPacket, ClientLevelPacket,
 var protected array<PlayersPacketStruct> InitServerPlayersPacket, ServerPlayersPacket, ClientPlayersPacket;
 var protected array<string> Events;
 var protected array<string> NewEvents;
+var protected array<string> NewEvents;
 var protected array<TranslateStruct> Translators;
 var protected array<Actor> IgnoreIDBuffer;
 var protected vector vWorldSpawn;
@@ -103,6 +104,7 @@ event PostLoadGame(bool bLoadFromSaveGame)
 	
 	bLevelLoaded = true;
 	IsHost = false;
+	IsHost = false;
 }
 
 // Starts a server.
@@ -112,13 +114,21 @@ function StartServer(int Port)
 
 	Username = class'S2MConfig'.default.sUsername;
 	IsHost = true;
+	local array<LevelPacketStruct> levelData;
+
+	Username = class'S2MConfig'.default.sUsername;
+	IsHost = true;
 
 	//Run initial update
 	levelData = GetLevelPacket();
 	WriteToFileLevel(levelData, OUTPUT_PATH);
+	//Run initial update
+	levelData = GetLevelPacket();
+	WriteToFileLevel(levelData, OUTPUT_PATH);
 	
-	FireClientEvent("Start" @ string(Port)); // External
+	FireClientEvent("Start" @ string(Port) @ Username @ U.GetHP()); // External
 	
+	class'S2MVersion'.static.DebugLog("Initialization packet created by" @ Username $ ".");
 	class'S2MVersion'.static.DebugLog("Initialization packet created by" @ Username $ ".");
 	class'S2MVersion'.static.DebugLog("Server starting up...");
 
@@ -131,6 +141,7 @@ function StartServer(int Port)
 // Stops the server if it's the host.
 function StopServer()
 {
+	if(!IsHost)
 	if(!IsHost)
 	{
 		class'S2MVersion'.static.DebugLog("Can't terminate a server you aren't hosting.");
@@ -210,6 +221,7 @@ function ConnectToServer()
 	}
 	
 	class'S2MVersion'.static.DebugLog("Client connected to host:" $ class'S2MConfig'.default.sUsername);
+	class'S2MVersion'.static.DebugLog("Client connected to host:" $ class'S2MConfig'.default.sUsername);
 	
 	// This is the point where we'd initialize the gamerule logic. I'm not going to do that yet, since it's currently irrelevant.
 	// class'S2MVersion'.static.DebugLog("Initializing gamerules...");
@@ -267,7 +279,60 @@ function array<PlayersPacketStruct> ReadFromFilePlayers(string path)
 }
 
 function array<LevelPacketStruct> ReadFromFileLevel(string path)
+function WriteToFilePlayers(array<PlayersPacketStruct> data, string path) {
+	U.SaveStringArray(FormatPlayersPacket(data), path);
+}
+
+function WriteToFileLevel(array<LevelPacketStruct> data, string path) {
+	U.SaveStringArray(FormatLevelPacket(data), path);
+}
+
+function WriteToFile(array<string> data, string path) {
+	U.SaveStringArray(data, path);
+}
+
+function array<PlayersPacketStruct> ReadFromFilePlayers(string path)
 {
+	local array<string> lines;
+	local array<PlayersPacketStruct> data;
+	U.LoadStringArray(lines, path);
+	
+	if(lines.Length > 0)
+	{
+		if(lines[0] != "")
+		{
+			class'S2MVersion'.static.DebugLog("Reading PlayerData of size" @ string(lines.Length) @ "from server.");
+			
+			data = FormatStringPlayersPacket(lines);
+		}
+	}
+
+	return data;
+}
+
+function array<LevelPacketStruct> ReadFromFileLevel(string path)
+{
+	local array<string> lines;
+	local array<LevelPacketStruct> data;
+	U.LoadStringArray(lines, path);
+	
+	if(lines.Length > 0)
+	{
+		if(lines[0] != "")
+		{
+			class'S2MVersion'.static.DebugLog("Reading LevelData of size" @ string(lines.Length) @ "from server.");
+			
+			data = FormatStringLevelPacket(lines);
+		}
+	}
+	return data;
+}
+
+function array<string> ReadFromFile(string path)
+{
+	local array<string> data;
+	U.LoadStringArray(data, path);
+	return data;
 	local array<string> lines;
 	local array<LevelPacketStruct> data;
 	U.LoadStringArray(lines, path);
@@ -302,6 +367,7 @@ event Destroyed()
 
 event Tick(float DeltaTime)
 {	
+{	
 	if(!bLevelLoaded)
 	{
 		return;
@@ -309,10 +375,13 @@ event Tick(float DeltaTime)
 	
 	HP = U.GetHP();
 
+
 	if(!bServerStarted)
 	{
 		return;
 	}
+
+	WriteToFileLevel(GetLevelPacket(), OUTPUT_PATH);
 
 	WriteToFileLevel(GetLevelPacket(), OUTPUT_PATH);
 }
@@ -331,6 +400,7 @@ function Actor CreateNewClient(class<Actor> C)
 	{
 		U.GivePawnController(KWPawn(A));
 	}
+
 
 	return A;
 }
@@ -357,6 +427,7 @@ function ProcessEvents()
 	local int i, j;
 	local array<string> TokenArray;
 	local LevelPacketStruct Ps;
+	local LevelPacketStruct Ps;
 	local bool B;
 	
 	if(Events.Length > 0)
@@ -375,6 +446,7 @@ function ProcessEvents()
 			{
 				class'S2MVersion'.static.DebugLog("Received" @ string(Events.Length) @ "events from server, processing events now...");
 				
+				//B = true;
 				//B = true;
 			}
 			
@@ -414,9 +486,30 @@ function ProcessEvents()
 						break;
 					}
 
+				case "CLIENT_CREATE": // External
+					// IMPORTANT THIS EVENT GETS FIRED WHEN A CLIENT HAS CREATED SOMETHING
+					// the host will then send out a HOST_CREATE event to let the other clients catch up
+					if(!IsHost) 
+					{
+						class'S2MVersion'.static.DebugLog("Client recieved HOST_CREATE ... ignore");
+						break;
+					}
+
 					// Avert your eyes everyone :D
 					// Creates an actor on the host.
 					TokenArray.Remove(0, 1);
+
+					Ps = FormatSingleTokenArrayLevelPacket(TokenArray);
+					
+					if (Ps.ID == none) 
+					{
+						Ps.ID = SmartSpawn(StringActorPointerToClass(TokenArray[0]));
+
+						U.MFancySetLocation(Ps.ID, Ps.Location);
+						U.FancySetRotation(Ps.ID, Ps.Rotation);
+						U.SetHealth(Pawn(Ps.ID), Ps.Health, true);
+						Ps.ID.LoopAnim(Ps.Anim);
+						Ps.ID.GotoState(Ps.State);
 
 					Ps = FormatSingleTokenArrayLevelPacket(TokenArray);
 					
@@ -435,8 +528,22 @@ function ProcessEvents()
 						class'S2MVersion'.static.DebugLog("CREATED ACTOR ON HOST");
 						AppendClientEvent("HOST_CREATE" @ FormatSingleLevelPacket(Ps) @ TokenArray[0]);
 					}
+						InitServerLevelPacket.Insert(InitServerLevelPacket.Length, 1);
+						InitServerLevelPacket[InitServerLevelPacket.Length - 1] = Ps;
+						class'S2MVersion'.static.DebugLog("CREATED ACTOR ON HOST");
+						AppendClientEvent("HOST_CREATE" @ FormatSingleLevelPacket(Ps) @ TokenArray[0]);
+					}
 
 					break;
+				case "HOST_CREATE": // External
+					// IMPORTANT THIS EVENT GETS FIRED WHEN A HOST HAS CREATED SOMETHING
+					// the client can then spawn something (if the actor was created by the client the packet contains a special)
+					if(IsHost) 
+					{
+						class'S2MVersion'.static.DebugLog("Host recieved a event from a HOST ... strange");
+						break;
+					}
+
 				case "HOST_CREATE": // External
 					// IMPORTANT THIS EVENT GETS FIRED WHEN A HOST HAS CREATED SOMETHING
 					// the client can then spawn something (if the actor was created by the client the packet contains a special)
@@ -461,18 +568,37 @@ function ProcessEvents()
 						U.SetHealth(Pawn(Ps.ID), Ps.Health, true);
 						Ps.ID.LoopAnim(Ps.Anim);
 						Ps.ID.GotoState(Ps.State);
+					Ps = FormatSingleTokenArrayLevelPacket(TokenArray);
+					
+					if (Ps.ID == none)
+					{
+						Ps.ID = SmartSpawn(StringActorPointerToClass(TokenArray[0]));
 
+						U.MFancySetLocation(Ps.ID, Ps.Location);
+						U.FancySetRotation(Ps.ID, Ps.Rotation);
+						U.SetHealth(Pawn(Ps.ID), Ps.Health, true);
+						Ps.ID.LoopAnim(Ps.Anim);
+						Ps.ID.GotoState(Ps.State);
+
+						InitServerLevelPacket.Insert(InitServerLevelPacket.Length, 1);
+						InitServerLevelPacket[InitServerLevelPacket.Length - 1] = Ps;
+					}
+					
 						InitServerLevelPacket.Insert(InitServerLevelPacket.Length, 1);
 						InitServerLevelPacket[InitServerLevelPacket.Length - 1] = Ps;
 					}
 					
 
 					// !? Make sure this does something
+					// !? Make sure this does something
 					Translators.Insert(Translators.Length, 1);
 					Translators[Translators.Length - 1].HostPtr = TokenArray[0];
 					Translators[Translators.Length - 1].ClientPtr = string(Ps.ID);
+					Translators[Translators.Length - 1].ClientPtr = string(Ps.ID);
 
 					break;
+				case "CLIENT_DESTROY": // External
+					// IMPORTANT THIS EVENT GETS FIRED WHEN A CLIENT HAS DESTROYED SOMETHING
 				case "CLIENT_DESTROY": // External
 					// IMPORTANT THIS EVENT GETS FIRED WHEN A CLIENT HAS DESTROYED SOMETHING
 					// Destroys an actor on the host. Expensive.
@@ -487,10 +613,28 @@ function ProcessEvents()
 						U.FancyDestroy(Actor(FindObject(TokenArray[1], class'Actor')));
 					}
 
+					if (IsHost)
+					{
+						U.FancyDestroy(Actor(FindObject(TokenArray[1], class'Actor')));
+					}
+					else
+					{
+						// ?! ADD TRANSLATION FOR CLIENT
+						U.FancyDestroy(Actor(FindObject(TokenArray[1], class'Actor')));
+					}
+
 					break;
 				case "HOST_DESTROY": // External
 					// IMPORTANT THIS EVENT GETS FIRED WHEN A CLIENT HAS DESTROYED SOMETHING
+				case "HOST_DESTROY": // External
+					// IMPORTANT THIS EVENT GETS FIRED WHEN A CLIENT HAS DESTROYED SOMETHING
 					// Destroys an actor on the client, after translating what the pointer would normally be for the client. Expensive.
+					if (IsHost)
+					{
+						class'S2MVersion'.static.DebugLog("Host recieved event from HOST ... strange");
+						break;
+					}
+
 					if (IsHost)
 					{
 						class'S2MVersion'.static.DebugLog("Host recieved event from HOST ... strange");
@@ -558,18 +702,30 @@ function AppendClientEvent(string event)
 }
 
 // // Fires an event out from the client.
+// Adds an event to the Events array (the tick function handles reading/writing)
+function AppendClientEvent(string event)
+{
+	NewEvents[NewEvents.Length] = "#" $ event;
+}
+
+// // Fires an event out from the client.
 function FireClientEvent(string sEvent)
 {
+	local array<string> Lines;
 	local array<string> Lines;
 	local int i;
 	
 	Lines = ReadFromFile(EVENT_OUT_PATH);
+	Lines = ReadFromFile(EVENT_OUT_PATH);
 	
 	// Remove empty spaces in event data file. This is necessary for CR LF formatting!
 	for(i = 0; i < Lines.Length; i++)
+	for(i = 0; i < Lines.Length; i++)
 	{
 		if(Lines[i] == "")
+		if(Lines[i] == "")
 		{
+			Lines.Remove(Max(i - 1, 0), 1);
 			Lines.Remove(Max(i - 1, 0), 1);
 			
 			i--;
@@ -580,16 +736,24 @@ function FireClientEvent(string sEvent)
 	Lines[Lines.Length - 1] = "#" $ sEvent;
 
 	WriteToFile(Lines, EVENT_OUT_PATH);
+	Lines.Insert(Lines.Length, 1);
+	Lines[Lines.Length - 1] = "#" $ sEvent;
+
+	WriteToFile(Lines, EVENT_OUT_PATH);
 }
 
 // Initialize the host's level packet.
 function array<LevelPacketStruct> GetLevelPacket()
+function array<LevelPacketStruct> GetLevelPacket()
 {
+	local array<Actor> Actors;
 	local array<Actor> Actors;
 	local Mover M;
 	local Trigger T;
+	local Trigger T;
 	local Pawn P;
 	local Pickup PU;
+	local TimedCue TC;
 	local TimedCue TC;
 	
 	// Get all relevant actor pointers.
@@ -597,10 +761,14 @@ function array<LevelPacketStruct> GetLevelPacket()
 	{
 		Actors.Insert(Actors.Length, 1);
 		Actors[Actors.Length - 1] = M;
+		Actors.Insert(Actors.Length, 1);
+		Actors[Actors.Length - 1] = M;
 	}
 	
 	foreach DynamicActors(class'Trigger', T)
 	{
+		Actors.Insert(Actors.Length, 1);
+		Actors[Actors.Length - 1] = T;
 		Actors.Insert(Actors.Length, 1);
 		Actors[Actors.Length - 1] = T;
 	}
@@ -615,10 +783,14 @@ function array<LevelPacketStruct> GetLevelPacket()
 		
 		Actors.Insert(Actors.Length, 1);
 		Actors[Actors.Length - 1] = P;
+		Actors.Insert(Actors.Length, 1);
+		Actors[Actors.Length - 1] = P;
 	}
 	
 	foreach DynamicActors(class'Pickup', PU)
 	{
+		Actors.Insert(Actors.Length, 1);
+		Actors[Actors.Length - 1] = PU;
 		Actors.Insert(Actors.Length, 1);
 		Actors[Actors.Length - 1] = PU;
 	}
@@ -627,9 +799,12 @@ function array<LevelPacketStruct> GetLevelPacket()
 	{
 		Actors.Insert(Actors.Length, 1);
 		Actors[Actors.Length - 1] = TC;
+		Actors.Insert(Actors.Length, 1);
+		Actors[Actors.Length - 1] = TC;
 	}
 	
 	// Format the packet with the data acquired.
+	return GetRelevantData(Actors);
 	return GetRelevantData(Actors);
 }
 
@@ -691,7 +866,13 @@ function array<LevelPacketStruct> GetRelevantData(array<Actor> As)
 function array<string> FormatLevelPacket(array<LevelPacketStruct> Ps)
 {
 	local array<string> Lines;
+	local array<string> Lines;
 	local int i;
+	
+	Lines.Insert(Lines.Length, 1);
+	Lines[Lines.Length -1] = "Tick#" $ string(TickCounter);
+	TickCounter++;
+
 	
 	Lines.Insert(Lines.Length, 1);
 	Lines[Lines.Length -1] = "Tick#" $ string(TickCounter);
@@ -701,8 +882,12 @@ function array<string> FormatLevelPacket(array<LevelPacketStruct> Ps)
 	{		
 		Lines.Insert(Lines.Length, 1);
 		Lines[Lines.Length - 1] = string(Ps[i].ID) $ "#" $ string(Ps[i].Location) $ "#" $ string(Ps[i].Rotation) $ "#" $ string(Ps[i].Health) $ "#" $ string(Ps[i].Anim) $ "#" $ string(Ps[i].State);
+	{		
+		Lines.Insert(Lines.Length, 1);
+		Lines[Lines.Length - 1] = string(Ps[i].ID) $ "#" $ string(Ps[i].Location) $ "#" $ string(Ps[i].Rotation) $ "#" $ string(Ps[i].Health) $ "#" $ string(Ps[i].Anim) $ "#" $ string(Ps[i].State);
 	}
 	
+	return Lines;
 	return Lines;
 }
 
@@ -745,6 +930,7 @@ function array<LevelPacketStruct> FormatStringLevelPacket(array<string> Ds)
 		TokenArray = U.Split(Ds[i], "#");
 		
 		if(TokenArray.Length != 6)
+		if(TokenArray.Length != 6)
 		{
 			class'S2MVersion'.static.DebugLog("Level data packet is not formatted correctly, prepare for issues...");
 		}
@@ -755,6 +941,7 @@ function array<LevelPacketStruct> FormatStringLevelPacket(array<string> Ds)
 		// This block of code is responsible for dynamically spawning actors if needed.
 		if(Ps[i].ID == none)
 		{
+			if(!IsHost)
 			if(!IsHost)
 			{
 				// Check to see if we've seen a pointer come from the host that needed translation.
@@ -795,6 +982,67 @@ function array<LevelPacketStruct> FormatStringLevelPacket(array<string> Ds)
 		Ps[i].Anim = U.SName(TokenArray[4]);
 		Ps[i].State = U.SName(TokenArray[5]);
 	}
+	
+	return Ps;
+}
+
+// Converts an array of level packets in string form back into their original form.
+function LevelPacketStruct FormatSingleTokenArrayLevelPacket(array<string> TokenArray)
+{
+	local LevelPacketStruct Ps;
+	local int j;
+	local bool bTranslated;
+	
+	bTranslated = false;
+		
+	if(TokenArray.Length != 6)
+	{
+		class'S2MVersion'.static.DebugLog("Level data packet is not formatted correctly, prepare for issues...");
+	}
+
+	// Confirm actor ID is present for client.
+	Ps.ID = Actor(FindObject(TokenArray[0], class'Actor'));
+
+	// This block of code is responsible for dynamically spawning actors if needed.
+	if(Ps.ID == none)
+	{
+		if(!IsHost)
+		{
+			// Check to see if we've seen a pointer come from the host that needed translation.
+			for(j = 0; j < Translators.Length; j++)
+			{
+				if(Translators[j].HostPtr == TokenArray[0])
+				{
+					// If we're here, we've previously dealt with this pointer, so let's translate it! :D
+					Ps.ID = Actor(FindObject(Translators[j].ClientPtr, class'Actor'));
+
+					bTranslated = true;
+
+					if(Ps.ID == none)
+					{
+						class'S2MVersion'.static.DebugLog("A translation error in interpreting a level data packet failed, minor issues will occur!");
+					}
+
+					break;
+				}
+			}
+		}
+		else
+		{
+			class'S2MVersion'.static.DebugLog("Received a packet as the host that somehow has an invalid ID, this could be fatal!");
+		}
+
+		if(!bTranslated)
+		{
+			class'S2MVersion'.static.DebugLog("Received an unknown level data packet, ignoring...");
+		}
+	}
+	
+	Ps.Location = vector(TokenArray[1]);
+	Ps.Rotation = rotator(TokenArray[2]);
+	Ps.Health = float(TokenArray[3]);
+	Ps.Anim = U.SName(TokenArray[4]);
+	Ps.State = U.SName(TokenArray[5]);
 	
 	return Ps;
 }
@@ -968,6 +1216,7 @@ function array<PlayersPacketStruct> FormatStringPlayersPacket(array<string> Ds)
 		// This block of code is responsible for dynamically spawning actors if needed.
 		if(Ps[i].ID == none)
 		{
+			if(!IsHost)
 			if(!IsHost)
 			{
 				// Check to see if we've seen a pointer come from the host that needed translation.
