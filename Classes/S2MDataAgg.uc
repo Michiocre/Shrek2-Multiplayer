@@ -52,6 +52,7 @@ var protected S2MGameRules GR;	// Handle this later, not relevant yet.
 var protected travel bool bServerStarted;
 var protected bool bLevelLoaded;
 var class<Actor> tClass;
+var protected S2MTcpLink TcpClient;
 
 // Files for Tick Updates
 const OUTPUT_PATH = "..\\System\\S2Multi\\Output.S2M";
@@ -147,6 +148,23 @@ function StopServer()
 function PreConnectToServer(string IP, int Port)
 {
 	FireClientEvent("Connect" @ IP @ string(Port)); // External
+
+	if(TcpClient != none)
+	{
+		TcpClient.Close();
+	}
+
+	TcpClient = Spawn(class'S2MTcpLink');
+	
+	if(TcpClient == none)
+	{
+		class'S2MVersion'.static.DebugLog("TCP client could not be created.");
+	}
+	else
+	{
+		class'S2MVersion'.static.DebugLog("Sending connection request...");
+			TcpClient.Connect(IP, Port, "Hello from " $ class'S2MConfig'.default.sUsername $ "!");
+	}
 	
 	class'S2MVersion'.static.DebugLog("Initiating server connection, awaiting response...");
 }
