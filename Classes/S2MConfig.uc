@@ -8,7 +8,6 @@
 class S2MConfig extends MInfo
 	Config(S2Multi);
 
-
 enum ELoadMode
 {
 	LM_None,

@@ -62,7 +62,7 @@ function SendChatMessage(string sMessage)
 {
 	S2MHUDItem_Chat(U.GetHudItems()[U.IsHUDItemLoaded(class'S2MHUDItem_Chat')]).CreateChatMessage(S2MMutator(U.GetMutator(class'S2MMutator')).S2MDA.Username, sMessage);
 	
-	S2MMutator(U.GetMutator(class'S2MMutator')).S2MDA.FireClientEvent("Chat#" $ S2MMutator(U.GetMutator(class'S2MMutator')).S2MDA.Username $ "#" $ sMessage);
+	S2MMutator(U.GetMutator(class'S2MMutator')).S2MDA.SendChatMessage(sMessage);
 }
 
 

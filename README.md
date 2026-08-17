@@ -13,8 +13,8 @@ The RoomServer forwards all packages from the client to the server and the other
 
 ## Protocol:
 ### Room Server
-`create` | Host -> RoomServer | Creates a new room and sets this connection as the host.  
-`connect:{room}:{default_connect_values}}` | Client -> RoomServer | Connects to a room and sets this user as a client then forwards the normal `connect` command with all the other values to host.
+`create:{name}` | Host -> RoomServer | Creates a new room and sets this connection as the host.  
+`connect:{name}:{room}:{default_connect_values}}` | Client -> RoomServer | Connects to a room and sets this user as a client then forwards the normal `connect` command with all the other values to host.
 `error:{message}:{data}` | RoomServer -> Host or RoomServer -> Client | Hostserver sends a errormessage to a user with a message and some additional data.
 
 ### Normal Mode

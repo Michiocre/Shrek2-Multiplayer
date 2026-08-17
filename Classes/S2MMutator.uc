@@ -38,13 +38,19 @@ event PostLoadGame(bool bLoadFromSaveGame)
 		
 		return;
 	}
-	
-	// Initialize multiplayer logic
-	U.CC("GSpyLite");
-	class'S2MVersion'.static.DebugLog("Initializing external mod");
-	
-	S2MDA = Spawn(class'S2MDataAgg');
-	class'S2MVersion'.static.DebugLog("Initializing data aggregator");
+
+	class'S2MVersion'.static.DebugLog("Looking for aggregator in " @ U.GetCurrentMap());
+	foreach DynamicActors(class'S2MDataAgg', S2MDA)
+	{
+		class'S2MVersion'.static.DebugLog("Reusing aggregator" @ string(S2MDA));
+    	break;
+	}
+
+	if (S2MDA == none)
+	{
+		class'S2MVersion'.static.DebugLog("Spawn new aggregator");
+		S2MDA = Spawn(class'S2MDataAgg');
+	}
 	
 	U.LoadHUDItem(class'S2MHUDItem_Chat');
 	
@@ -70,11 +76,9 @@ event PostLoadGame(bool bLoadFromSaveGame)
 			break;
 		case LM_Host:
 			S2MDA.StartServer(class'S2MConfig'.default.iPort);
-			
 			break;
 		case LM_Connect:
 			S2MDA.PreConnectToServer(class'S2MConfig'.default.sIPAddress, class'S2MConfig'.default.iPort);
-			
 			break;
 		default:
 			break;
@@ -86,8 +90,6 @@ event PostLoadGame(bool bLoadFromSaveGame)
 
 event ServerTraveling(string URL, bool bItems)
 {
-	S2MDA.FireClientEvent("ChangeLevel" @ URL);
-	
 	super.ServerTraveling(URL, bItems);
 }
 
